@@ -1,13 +1,15 @@
 import os
+import re
+
 from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram import F
 from aiogram.filters import Command
 from aiogram.utils.markdown import hlink, hbold
-from db import async_session, TestFile
+from db import async_session
 import asyncio
 from sqlalchemy import text
-
+from parser import parse_text_and_save, create_and_send_graph
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 
@@ -53,8 +55,6 @@ async def start_command(message: Message):
 async def init_command(message: Message):
     await message.answer("Пришли файл (txt/doc/docx), который ты хочешь проанализировать.")
 
-
-# Обработчик получения файла после команды /init
 @router.message(F.document)
 async def handle_file(message: Message):
     file = message.document
@@ -66,16 +66,14 @@ async def handle_file(message: Message):
         # Преобразуем содержимое в текст
         text = file_content.getvalue().decode('utf-8')
 
-        # Сохраняем содержимое в базу данных
+        # Сохраняем содержимое в базу данных (распарсивая на предложения и слова)
         async with async_session() as session:
-            new_file = TestFile(text=text)
-            session.add(new_file)
-            await session.commit()
+            await parse_text_and_save(text, session)
 
         # Отправляем сообщение с запросом на выбор команды
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="Таблица")],
+                [KeyboardButton(text="Текст")],
                 [KeyboardButton(text="Картинка")]
             ],
             resize_keyboard=True
@@ -85,21 +83,53 @@ async def handle_file(message: Message):
 
 
 # Обработка выбора команды (Таблица или Картинка)
-@router.message(F.text.in_({"Таблица", "Картинка"}))
+@router.message(F.text.in_({"Текст", "Картинка"}))
 async def handle_choice(message: Message):
     # Получаем последнюю запись в базе данных
     async with async_session() as session:
         # Используем text() для объявления SQL-запроса
         result = await session.execute(
-            text("SELECT text FROM test_files ORDER BY id DESC LIMIT 1")
+            text("""
+            with words as (
+                select
+                    word_id,
+                    coalesce(start_format_string, '') || coalesce(text, '') || coalesce(end_format_string, '') as text
+                from word w
+                join dep_mapping dm on w.dep = dm.code
+                left join dep_formats df using(description)
+            ), raw as (
+            select ws.sentence_id,
+                    sentence_number,
+                    REGEXP_REPLACE(
+                       REGEXP_REPLACE(
+                           STRING_AGG(w.text, ' ' ORDER BY ws.word_number),
+                           ' (\.|,|!|\?|:|;|\)|\])',
+                           '\1',
+                           'g'
+                       ),
+                       '(\(|\[) ',
+                       '\1',
+                       'g'
+                   ) AS full_text
+            FROM sentence_to_text stt
+                JOIN sentence s USING (sentence_id)
+                join word_to_sentence ws using (sentence_id)
+                join words w using (word_id)
+            group by ws.sentence_id, sentence_number
+            )
+            select STRING_AGG(full_text, ' ' ORDER BY sentence_number) AS full_text from raw
+            """)
         )
         last_file = result.fetchone()
 
     if last_file:
-        if message.text == "Таблица":
-            await message.answer(f"Вот содержимое файла в виде таблицы:\n\n{last_file[0]}")
+        if message.text == "Текст":
+            await message.answer(f"Вот содержимое файла в виде таблицы:\n\n{last_file[0]}", parse_mode="HTML")
+
         elif message.text == "Картинка":
-            await message.answer(f"Вот содержимое файла в виде картинки:\n\n{last_file[0]}")
+            await create_and_send_graph(session)
+            with open("graph.png", 'rb') as graph_file:
+                await message.answer("Вот ваша картинка:", reply_photo=graph_file)
     else:
         await message.answer("Нет данных для отображения.")
 

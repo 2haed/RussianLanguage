@@ -1,3 +1,7 @@
 aiogram==3.13
 sqlalchemy
 asyncpg
+spacy~=3.8.2
+networkx
+matplotlib
+graphviz
