@@ -1,0 +1,32 @@
+
+version: '3.8'
+
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  bot:
+    build: .
+    environment:
+      TELEGRAM_TOKEN: "7204688795:AAFGUAzaT1cndovYVl9b_Ql9ve2uBr7WCrA"
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
+    depends_on:
+      - db
+  db_migrate:
+    build: .
+    command: [ "python", "migrate.py" ]
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db/postgres"
+
+volumes:
+  postgres_data:
