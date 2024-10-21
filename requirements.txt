@@ -5,5 +5,5 @@ spacy~=3.8.2
 networkx~=3.4.1
 matplotlib~=3.9.2
 pygraphviz
-docx
+python-docx
 graphviz~=0.20.3

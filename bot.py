@@ -9,8 +9,9 @@ from aiogram.utils.markdown import hlink, hbold
 from db import async_session
 import asyncio
 from sqlalchemy import text
-from parser import parse_text_and_save, create_and_send_graph
+from parser import parse_text_and_save, create_and_send_graph, extract_text_from_doc
 import logging
+from docx import Document
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 
@@ -56,11 +57,13 @@ async def handle_file(message: Message):
             text_content = ""
 
             try:
-                # if file_extension == ".txt":
-                text_content = file_content.getvalue().decode('utf-8')
-                # elif file_extension in (".docx", ".doc"):
-                #     doc = Document(file_content)
-                #     text_content = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+                if file_extension == ".txt":
+                    text_content = file_content.getvalue().decode('utf-8')
+                elif file_extension == ".docx":
+                    doc = Document(file_content)
+                    text_content = "\n".join(paragraph.text for paragraph in doc.paragraphs)
+                elif file_extension == ".doc":
+                    text_content = extract_text_from_doc(file_content)
 
                 async with async_session() as session:
                     await parse_text_and_save(text_content, session)

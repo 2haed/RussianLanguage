@@ -1,12 +1,18 @@
+import os
 from datetime import datetime
 from uuid import uuid4
 import matplotlib.pyplot as plt
 import networkx as nx
+import pythoncom
 import spacy
 from sqlalchemy import text
 from db import SentenceToText, Sentence, Word, WordToSentence
+import os
+import win32com.client
+
 
 nlp = spacy.load("ru_core_news_sm")
+nlp.max_length = 3000000
 async def parse_text_and_save(text: str, session):
     # Генерируем UUID для текста
     text_id = uuid4()
@@ -104,5 +110,10 @@ async def create_and_send_graph(session):
     plt.close()  # Закрытие фигуры
 
 
-
+def extract_text_from_doc(file_content):
+    word = win32com.client.Dispatch("Word.Application")
+    word.visible = False
+    wb = word.Documents.Open(file_content)
+    doc = word.ActiveDocument
+    print(doc.Range().Text)
 
