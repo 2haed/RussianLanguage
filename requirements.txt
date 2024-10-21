@@ -1,7 +1,9 @@
 aiogram==3.13
-sqlalchemy
+sqlalchemy~=2.0.36
 asyncpg
 spacy~=3.8.2
-networkx
-matplotlib
+networkx~=3.4.1
+matplotlib~=3.9.2
 pygraphviz
+docx
+graphviz~=0.20.3

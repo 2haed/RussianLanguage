@@ -1,16 +1,16 @@
-import asyncio
 import os
-
+import re
 from aiogram import Bot, Dispatcher, Router
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, FSInputFile, InlineKeyboardButton, CallbackQuery
 from aiogram import F
 from aiogram.filters import Command
-from aiogram.types import Message, FSInputFile, InlineKeyboardButton, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.utils.markdown import hlink, hbold
-from sqlalchemy import text
-
 from db import async_session
+import asyncio
+from sqlalchemy import text
 from parser import parse_text_and_save, create_and_send_graph
+import logging
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 
@@ -52,22 +52,30 @@ async def handle_file(message: Message):
         if file:
             file_info = await bot.get_file(file.file_id)
             file_content = await bot.download_file(file_info.file_path)
-            text_content = file_content.getvalue().decode('utf-8')
+            file_extension = os.path.splitext(file.file_name)[1].lower()
+            text_content = ""
 
-            async with async_session() as session:
-                await parse_text_and_save(text_content, session)
+            try:
+                # if file_extension == ".txt":
+                text_content = file_content.getvalue().decode('utf-8')
+                # elif file_extension in (".docx", ".doc"):
+                #     doc = Document(file_content)
+                #     text_content = "\n".join(paragraph.text for paragraph in doc.paragraphs)
 
-            waiting_for_file[message.from_user.id] = False
+                async with async_session() as session:
+                    await parse_text_and_save(text_content, session)
 
-            builder = InlineKeyboardBuilder()
-            builder.add(InlineKeyboardButton(text="Текст", callback_data="text_choice"))
-            builder.add(InlineKeyboardButton(text="Картинка", callback_data="image_choice"))
-            builder.add(InlineKeyboardButton(text="Статистика", callback_data="stats_choice"))
-            builder.adjust(1)
+                waiting_for_file[message.from_user.id] = False
 
-            await message.answer(
-                "Файл получен. Как ты хочешь увидеть результат: в виде текста, картинки или статистики?",
-                reply_markup=builder.as_markup())
+                builder = InlineKeyboardBuilder()
+                builder.add(InlineKeyboardButton(text="Текст", callback_data="text_choice"))
+                builder.add(InlineKeyboardButton(text="Картинка", callback_data="image_choice"))
+                builder.add(InlineKeyboardButton(text="Статистика", callback_data="stats_choice"))
+                builder.adjust(1)
+                await message.answer("Файл получен. Как ты хочешь увидеть результат: в виде текста, картинки или статистики?",
+                                     reply_markup=builder.as_markup())
+            except Exception as e:
+                await message.answer(f"Произошла ошибка при обработке файла: {str(e)}")
     else:
         await message.answer("Сначала используй команду /init, чтобы отправить файл.")
 
@@ -126,8 +134,11 @@ async def handle_choice(call: CallbackQuery):
                             join sentence using(sentence_id)
                             join sentence_to_text using(sentence_id)
                             join dep_mapping dm on w.dep = dm.code
-                        where meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
+                        where 1=1
+                            and meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
+                            and pos != 'PUNCT'
                         group by 1
+                        order by 2 desc
                         """))
             stats = result.fetchall()
 
