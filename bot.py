@@ -114,7 +114,7 @@ async def handle_choice(message: Message):
             )
             last_file = result.fetchone()
             if last_file:
-                await message.answer(f"Вот содержимое файла в виде таблицы:\n\n{last_file[0]}", parse_mode="HTML")
+                await message.answer(f"Вот содержимое файла разобранное по членам предложения:\n\n{last_file[0]}", parse_mode="HTML")
 
         elif message.text == "Картинка":
             await create_and_send_graph(session)
