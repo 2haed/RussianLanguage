@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import spacy
 from db import SentenceToText, Sentence, Word, WordToSentence
 from uuid import uuid4
@@ -14,6 +14,7 @@ async def parse_text_and_save(text: str, session):
 
     # Пропускаем текст через модель spaCy
     doc = nlp(text)
+    time = datetime.now()
 
     sentence_number = 0
     for sent in doc.sents:
@@ -27,7 +28,7 @@ async def parse_text_and_save(text: str, session):
         session.add(new_sentence)
 
         # Сохраняем связь предложения с текстом в таблицу sentence_to_text
-        new_sentence_to_text = SentenceToText(sentence_id=sentence_id, text_id=text_id, sentence_number=sentence_number, meta_timestamp=datetime.now())
+        new_sentence_to_text = SentenceToText(sentence_id=sentence_id, text_id=text_id, sentence_number=sentence_number, meta_timestamp=time)
         session.add(new_sentence_to_text)
 
         # Обрабатываем каждое слово в предложении

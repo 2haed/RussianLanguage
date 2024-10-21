@@ -1,6 +1,5 @@
 import os
 import re
-
 from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram import F
@@ -90,37 +89,37 @@ async def handle_choice(message: Message):
         # Используем text() для объявления SQL-запроса
         result = await session.execute(
             text("""
-            with words as (
-                select
-                    word_id,
-                    coalesce(start_format_string, '') || coalesce(text, '') || coalesce(end_format_string, '') as text
-                from word w
-                join dep_mapping dm on w.dep = dm.code
-                left join dep_formats df using(description)
-            ), raw as (
-            select ws.sentence_id,
-                    sentence_number,
-                    REGEXP_REPLACE(
-                       REGEXP_REPLACE(
-                           STRING_AGG(w.text, ' ' ORDER BY ws.word_number),
-                           ' (\.|,|!|\?|:|;|\)|\])',
-                           '\1',
-                           'g'
-                       ),
-                       '(\(|\[) ',
-                       '\1',
-                       'g'
-                   ) AS full_text
-            FROM sentence_to_text stt
-                JOIN sentence s USING (sentence_id)
-                join word_to_sentence ws using (sentence_id)
-                join words w using (word_id)
-            group by ws.sentence_id, sentence_number
-            )
-            select STRING_AGG(full_text, ' ' ORDER BY sentence_number) AS full_text from raw
+        with words as (
+                        select
+                            word_id,
+        --                     text
+                            coalesce(start_format_string, '') || coalesce(text, '') || coalesce(end_format_string, '') as text
+                        from word w
+                        join dep_mapping dm on w.dep = dm.code
+                        left join dep_formats df using(description)
+                    ), raw as (
+                    select ws.sentence_id,
+                            sentence_number,
+                                    STRING_AGG(w.text, ' ' ORDER BY ws.word_number)
+            AS full_text
+                    FROM sentence_to_text stt
+                        JOIN sentence s USING (sentence_id)
+                        join word_to_sentence ws using (sentence_id)
+                        join words w using (word_id)
+                    where meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
+                    group by ws.sentence_id, sentence_number
+                    )
+                    select STRING_AGG(full_text, ' ' ORDER BY sentence_number) AS full_text from raw
             """)
         )
         last_file = result.fetchone()
+        clean_last_file = str(last_file[0])
+        # Проверяем длину строки и кодировку
+        print(f"Кодировка строки: {clean_last_file.encode('utf-8')}")
+        print(f"Строка: {clean_last_file}")
+        print(f"Полученный результат: {repr(last_file[0])}")
+
+
 
     if last_file:
         if message.text == "Текст":

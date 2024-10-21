@@ -6,8 +6,6 @@ import os
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-from srsly.ruamel_yaml.timestamp import TimeStamp
-
 # Настройки подключения к базе данных
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@db:5432/postgres")
 
