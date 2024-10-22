@@ -1,3 +1,4 @@
+import prettytable as pt 
 import asyncio
 import os
 
@@ -105,15 +106,17 @@ async def handle_choice(call: CallbackQuery):
                 if len(full_text) <= 4096:
                     await call.message.answer(f"Вот содержимое файла:\n\n{full_text}", parse_mode="HTML")
                 else:
-                    with open("text_data.txt", "w", encoding="utf-8") as file:
+                    with open("text_data.txt", "w", encoding="utf-8") as file: # TODO поменять на маркдаун
                         file.write(full_text)
 
                     txt_file = FSInputFile("text_data.txt")
                     await call.message.answer_document(txt_file, caption="Текст слишком большой, вот файл с текстом.")
 
         elif call.data == "image_choice":
-            await create_and_send_graph(session)
-            if os.path.exists('graph.png'):
+            status = await create_and_send_graph(session)
+            if status == 1:
+                await call.message.answer("Слишком большой текст, не удалось создать картинку.")
+            elif os.path.exists('graph.png'):
                 photo_file = FSInputFile(path='graph.png')
                 await call.message.answer_photo(photo=photo_file, caption="Вот ваша картинка:")
             else:
@@ -121,27 +124,23 @@ async def handle_choice(call: CallbackQuery):
 
         elif call.data == "stats_choice":
             result = await session.execute(text("""
-                        select dm.description as dep, count(*) from word w
+                        select w.lemma, dm.description as dep, count(*) from word w
                             join word_to_sentence using(word_id)
                             join sentence using(sentence_id)
                             join sentence_to_text using(sentence_id)
                             join dep_mapping dm on w.dep = dm.code
                         where meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
-                        group by 1
+                        group by 1, 2
                         """))
             stats = result.fetchall()
 
             if stats:
-                max_dep_length = max(len(row.dep) for row in stats)
+                table = pt.PrettyTable(['Слово', 'Член предложения', 'Кол-во'])
 
-                table_header = "Член предложения" + " " * (max_dep_length - len("Член предложения")) + " | Количество\n"
-                table_header += "-" * (max_dep_length + 14) + "\n"
+                for row in stats[30:]:
+                    table.add_row([row.lemma, row.dep, row.count])
 
-                table_rows = ""
-                for row in stats:
-                    table_rows += f"{row.dep:<{max_dep_length}} | {row.count}\n"
-                table = f"<pre>{table_header}{table_rows}</pre>"
-                await call.message.answer(table, parse_mode="HTML")
+                await call.message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
 
 
 async def start_bot():

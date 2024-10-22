@@ -39,7 +39,7 @@ async def parse_text_and_save(text: str, session):
             word_id = uuid4()
 
             # Сохраняем слово в таблицу word с его частью речи и синтаксической связью
-            new_word = Word(word_id=word_id, text=token.text, pos=token.pos_, dep=token.dep_, head_idx=token.head.i, token_idx=token.i)
+            new_word = Word(word_id=word_id, lemma=token.lemma_, text=token.text, pos=token.pos_, dep=token.dep_, head_idx=token.head.i, token_idx=token.i)
             session.add(new_word)
 
             # Сохраняем связь слова с предложением в таблицу word_to_sentence
@@ -60,6 +60,9 @@ async def create_and_send_graph(session):
             where meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
                 """))
     words = result.fetchall()
+
+    if len(words > 100):
+        return 1
 
     # Формируем список словарей
     words_list = [
@@ -102,6 +105,7 @@ async def create_and_send_graph(session):
     plt.axis('off')
     plt.savefig("graph.png", format="png")
     plt.close()  # Закрытие фигуры
+    return 0
 
 
 
