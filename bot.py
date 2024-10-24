@@ -1,9 +1,7 @@
 import os
-import re
-from io import BytesIO
 
 from aiogram import Bot, Dispatcher, Router
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, FSInputFile, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, FSInputFile, InlineKeyboardButton, CallbackQuery
 from aiogram import F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -11,11 +9,10 @@ from aiogram.utils.markdown import hlink, hbold
 from db import async_session
 import asyncio
 from sqlalchemy import text
-from parser import parse_text_and_save, create_and_send_graph, process_file
-import logging
+from utils.parser import parse_text_and_save, create_and_send_graph, process_file
 
-from reports import generate_excel_report
-from stats import plot_part_of_speech_distribution, plot_syntax_dependency_distribution, \
+from utils.reports import generate_excel_report
+from utils.stats import plot_part_of_speech_distribution, plot_syntax_dependency_distribution, \
     plot_sentence_length_distribution, plot_top_10_frequent_words, plot_word_part_of_speech_vs_sentence_length, \
     plot_user_syntax_statistics, plot_sentence_length_over_time, plot_pos_dependency_correlation
 
