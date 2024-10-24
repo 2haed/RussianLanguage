@@ -7,3 +7,5 @@ matplotlib~=3.9.2
 pygraphviz
 python-docx
 graphviz~=0.20.3
+docx~=0.2.4
+aspose-words

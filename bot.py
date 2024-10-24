@@ -1,5 +1,7 @@
 import os
 import re
+from io import BytesIO
+
 from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, FSInputFile, InlineKeyboardButton, CallbackQuery
 from aiogram import F
@@ -9,9 +11,9 @@ from aiogram.utils.markdown import hlink, hbold
 from db import async_session
 import asyncio
 from sqlalchemy import text
-from parser import parse_text_and_save, create_and_send_graph, extract_text_from_doc
+from parser import parse_text_and_save, create_and_send_graph, process_file
 import logging
-from docx import Document
+
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 
@@ -54,16 +56,9 @@ async def handle_file(message: Message):
             file_info = await bot.get_file(file.file_id)
             file_content = await bot.download_file(file_info.file_path)
             file_extension = os.path.splitext(file.file_name)[1].lower()
-            text_content = ""
 
             try:
-                if file_extension == ".txt":
-                    text_content = file_content.getvalue().decode('utf-8')
-                elif file_extension == ".docx":
-                    doc = Document(file_content)
-                    text_content = "\n".join(paragraph.text for paragraph in doc.paragraphs)
-                elif file_extension == ".doc":
-                    text_content = extract_text_from_doc(file_content)
+                text_content = await process_file(file_content, file_extension)
 
                 async with async_session() as session:
                     await parse_text_and_save(text_content, session)

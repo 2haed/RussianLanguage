@@ -6,9 +6,14 @@ WORKDIR /app
 # Копируем файлы проекта в контейнер
 COPY . /app
 
-# Устанавливаем системные зависимости для pygraphviz и Graphviz
+# Устанавливаем системные зависимости для pygraphviz, Graphviz и antiword
 RUN apt-get update && \
-    apt-get install -y graphviz libgraphviz-dev gcc g++ && \
+    apt-get install -y \
+        graphviz \
+        libgraphviz-dev \
+        gcc \
+        g++ \
+        antiword && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

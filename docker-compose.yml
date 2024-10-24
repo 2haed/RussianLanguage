@@ -18,6 +18,7 @@ services:
     environment:
       TELEGRAM_TOKEN: "7204688795:AAFGUAzaT1cndovYVl9b_Ql9ve2uBr7WCrA"
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "true"
     depends_on:
       - db
   db_migrate:
