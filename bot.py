@@ -14,6 +14,10 @@ from sqlalchemy import text
 from parser import parse_text_and_save, create_and_send_graph, process_file
 import logging
 
+from reports import generate_excel_report
+from stats import plot_part_of_speech_distribution, plot_syntax_dependency_distribution, \
+    plot_sentence_length_distribution, plot_top_10_frequent_words, plot_word_part_of_speech_vs_sentence_length, \
+    plot_user_syntax_statistics, plot_sentence_length_over_time, plot_pos_dependency_correlation
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 
@@ -29,7 +33,10 @@ waiting_for_file = {}
 async def cmd_help(message: Message):
     await message.answer(("Список команд:\n"
                           "/help - Показывает этот список\n"
-                          "/init - бот запросит текст с файлом, чтобы выдать обратно текст, разобранный по членам предложения\n"))
+                          "/init - Бот запросит текст с файлом, чтобы выдать обратно текст, разобранный по членам предложения\n"
+                          "/stats - Статистические данные.\n"
+                          "/leaderboard - Таблица лидеров.\n"
+                          ))
 
 
 @router.message(Command("start"))
@@ -61,7 +68,7 @@ async def handle_file(message: Message):
                 text_content = await process_file(file_content, file_extension)
 
                 async with async_session() as session:
-                    await parse_text_and_save(text_content, session)
+                    await parse_text_and_save(text_content, message.from_user.id, session, message.from_user.full_name)
 
                 waiting_for_file[message.from_user.id] = False
 
@@ -93,7 +100,7 @@ async def handle_choice(call: CallbackQuery):
                                 ), raw as (
                                 select ws.sentence_id,
                                         sentence_number,
-                                                STRING_AGG(w.text, ' ' ORDER BY ws.word_number)
+                                                STRING_AGG(w.text, ' ' ORDER BY word_number)
                         AS full_text
                                 FROM sentence_to_text stt
                                     JOIN sentence s USING (sentence_id)
@@ -118,10 +125,11 @@ async def handle_choice(call: CallbackQuery):
                     await call.message.answer_document(txt_file, caption="Текст слишком большой, вот файл с текстом.")
 
         elif call.data == "image_choice":
-            await create_and_send_graph(session)
-            if os.path.exists('graph.png'):
-                photo_file = FSInputFile(path='graph.png')
-                await call.message.answer_photo(photo=photo_file, caption="Вот ваша картинка:")
+            status = await create_and_send_graph(session)
+            if status:
+                if os.path.exists('graph.png'):
+                    photo_file = FSInputFile(path='graph.png')
+                    await call.message.answer_photo(photo=photo_file, caption="Вот ваша картинка:")
             else:
                 await call.message.answer("Не удалось создать картинку.")
 
@@ -152,6 +160,101 @@ async def handle_choice(call: CallbackQuery):
                 table = f"<pre>{table_header}{table_rows}</pre>"
                 await call.message.answer(table, parse_mode="HTML")
 
+
+@router.message(Command("leaderboard"))
+async def leaderboard_command(message: Message):
+    async with async_session() as session:
+        result = await session.execute(text("""
+            SELECT user_name as user_id, uniq_words, uniq_files
+            FROM user_stats
+            ORDER BY uniq_words DESC
+            LIMIT 10;
+        """))
+        leaderboard = result.fetchall()
+
+        if leaderboard:
+            table_header = f"{'User':<10} | {'Слов':<12} | {'Файлов загружено':<12}\n"
+            table_header += "-" * 52 + "\n"
+
+            table_rows = ""
+            for row in leaderboard:
+                table_rows += f"{str(row.user_id):<10} | {row.uniq_words:<12} | {row.uniq_files:<12}\n"
+
+            table = f"<pre>{table_header}{table_rows}</pre>"
+            await message.answer(table, parse_mode="HTML")
+        else:
+            await message.answer("Нет данных для отображения.")
+
+
+@router.message(Command("stats"))
+async def stats_command(message: Message):
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="Графики", callback_data="stats_graphics"))
+    builder.add(InlineKeyboardButton(text="Отчеты", callback_data="stats_reports"))
+    builder.adjust(2)
+
+    await message.answer("Выберите категорию:", reply_markup=builder.as_markup())
+
+
+
+@router.callback_query(F.data.in_({"stats_graphics", "stats_reports"}))
+async def stats_choice(call: CallbackQuery):
+    if call.data == "stats_graphics":
+        builder = InlineKeyboardBuilder()
+        builder.add(InlineKeyboardButton(text="Распределение частей речи", callback_data="graph_pos_distribution"))
+        builder.add(InlineKeyboardButton(text="Распределение синтаксических зависимостей", callback_data="graph_syntax_dependency"))
+        builder.add(InlineKeyboardButton(text="Длина предложений", callback_data="graph_sentence_length"))
+        builder.add(InlineKeyboardButton(text="Топ 10 частотных слов", callback_data="graph_top_frequent_words"))
+        builder.add(InlineKeyboardButton(text="Часть речи и длина предложения", callback_data="graph_pos_vs_sentence_length"))
+        builder.add(InlineKeyboardButton(text="Статистика синтаксиса пользователей", callback_data="graph_user_syntax_stats"))
+        builder.add(InlineKeyboardButton(text="Длина предложений с течением времени", callback_data="graph_sentence_length_over_time"))
+        builder.add(InlineKeyboardButton(text="Корреляция частей речи и зависимостей",callback_data="graph_pos_dependency_correlation"))
+        builder.adjust(1)
+        await call.message.edit_text("Выберите график:", reply_markup=builder.as_markup())
+    elif call.data == "stats_reports":
+        builder = InlineKeyboardBuilder()
+        builder.add(InlineKeyboardButton(text="Создать отчет в Excel", callback_data="generate_excel_report"))
+        builder.adjust(1)
+        await call.message.edit_text("Выберите отчет:", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data == "generate_excel_report")
+async def handle_excel_report(call: CallbackQuery):
+    try:
+        report_file_path = await generate_excel_report()
+        if os.path.exists(report_file_path):
+            excel_file = FSInputFile(path=report_file_path)
+            await call.message.answer_document(excel_file, caption="Вот ваш отчет в Excel.")
+        else:
+            await call.message.answer("Не удалось создать отчет.")
+
+    except Exception as e:
+        await call.message.answer(f"Произошла ошибка при создании отчета: {str(e)}")
+
+@router.callback_query(F.data.in_([
+    "graph_pos_distribution",
+    "graph_syntax_dependency",
+    "graph_sentence_length",
+    "graph_top_frequent_words",
+    "graph_pos_vs_sentence_length",
+    "graph_user_syntax_stats",
+    "graph_sentence_length_over_time",
+    "graph_pos_dependency_correlation"
+]))
+async def handle_graph_choice(call: CallbackQuery):
+    graph_map = {
+        "graph_pos_distribution": plot_part_of_speech_distribution,
+        "graph_syntax_dependency": plot_syntax_dependency_distribution,
+        "graph_sentence_length": plot_sentence_length_distribution,
+        "graph_top_frequent_words": plot_top_10_frequent_words,
+        "graph_pos_vs_sentence_length": plot_word_part_of_speech_vs_sentence_length,
+        "graph_user_syntax_stats": plot_user_syntax_statistics,
+        "graph_sentence_length_over_time": plot_sentence_length_over_time,
+        "graph_pos_dependency_correlation": plot_pos_dependency_correlation,
+    }
+
+    graph_function = graph_map.get(call.data)
+    if graph_function:
+        await graph_function(call)
 
 async def start_bot():
     dp.include_router(router)

@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import Column, Integer, Text, String, ForeignKey, select, func, TIMESTAMP
+from sqlalchemy import Column, Integer, Text, String, ForeignKey, select, func, TIMESTAMP, text
 import os
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -16,6 +16,20 @@ async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession
 async def create_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("""
+                    CREATE OR REPLACE VIEW user_stats AS
+                    SELECT
+                        user_name,
+                        COUNT(word_id) AS uniq_words,
+                        COUNT(distinct text_id) AS uniq_files
+                    FROM word w
+                    JOIN word_to_sentence USING(word_id)
+                    JOIN sentence s USING(sentence_id)
+                    JOIN sentence_to_text ws USING(sentence_id)
+                    JOIN dep_mapping dm ON w.dep = dm.code
+                    join user_info ui ON s.user_id = ui.user_id
+                    GROUP BY user_name;
+                """))
 
 
 class SentenceToText(Base):
@@ -26,10 +40,17 @@ class SentenceToText(Base):
     meta_timestamp = Column(TIMESTAMP, nullable=False)
 
 
+class UserInfo(Base):
+    __tablename__ = 'user_info'
+
+    user_id = Column(Integer, primary_key=True, unique=True)
+    user_name = Column(String, unique=True, nullable=False)
+
 class Sentence(Base):
     __tablename__ = 'sentence'
     sentence_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     text = Column(String, nullable=False)
+    user_id = Column(Integer,  nullable=False)
 
 
 class WordToSentence(Base):
@@ -45,9 +66,8 @@ class Word(Base):
     text = Column(String, nullable=False)
     pos = Column(String, nullable=False)  # Часть речи
     dep = Column(String, nullable=False)  # Синтаксическая зависимость
+    lemma = Column(String, nullable=False)
     head_idx = Column(Integer, nullable=False)
-    token_idx = Column(Integer, nullable=False)
-
 
 class POSMapping(Base):
     __tablename__ = 'pos_mapping'
@@ -109,7 +129,7 @@ DEP_MAPPING = {
     "compound": "сложный состав",
     "acl": "деепричастие",
     "advcl": "придаточное обстоятельство",
-    "conj": "сказуемое (сочинительная связь)",
+    "conj": "сказуемое",
     "cc": "союз",
     "punct": "знак препинания",
     "neg": "частица отрицания",

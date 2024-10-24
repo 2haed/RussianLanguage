@@ -4,21 +4,28 @@ from uuid import uuid4
 import matplotlib.pyplot as plt
 import networkx as nx
 import spacy
-from sqlalchemy import text
+from sqlalchemy import text, select
 import aspose.words as aw
 import os
 from docx import Document
 import tempfile
 import asyncio
-from db import SentenceToText, Sentence, Word, WordToSentence
+from db import SentenceToText, Sentence, Word, WordToSentence, UserInfo
 
 nlp = spacy.load("ru_core_news_sm")
 nlp.max_length = 3000000
 
 
-async def parse_text_and_save(text: str, session):
-    text_id = uuid4()
+async def parse_text_and_save(text: str, user_id: int, session, user_name: str):
+    existing_user = await session.execute(select(UserInfo).filter_by(user_id=user_id))
+    user_record = existing_user.scalar()
 
+    # Если пользователь не найден, добавляем его в таблицу
+    if not user_record:
+        new_user = UserInfo(user_id=user_id, user_name=user_name)
+        session.add(new_user)
+
+    text_id = uuid4()
     doc = nlp(text)
     time = datetime.now()
 
@@ -28,7 +35,7 @@ async def parse_text_and_save(text: str, session):
 
         sentence_id = uuid4()
 
-        new_sentence = Sentence(sentence_id=sentence_id, text=sent.text)
+        new_sentence = Sentence(sentence_id=sentence_id, text=sent.text, user_id=user_id)
         session.add(new_sentence)
 
         new_sentence_to_text = SentenceToText(sentence_id=sentence_id, text_id=text_id, sentence_number=sentence_number,
@@ -41,11 +48,10 @@ async def parse_text_and_save(text: str, session):
 
             word_id = uuid4()
 
-            new_word = Word(word_id=word_id, text=token.text, pos=token.pos_, dep=token.dep_, head_idx=token.head.i,
-                            token_idx=token.i)
+            new_word = Word(word_id=word_id, text=token.text, pos=token.pos_, dep=token.dep_, lemma=token.lemma_, head_idx=token.head.i)
             session.add(new_word)
 
-            new_word_to_sentence = WordToSentence(word_id=word_id, sentence_id=sentence_id, word_number=word_number)
+            new_word_to_sentence = WordToSentence(word_id=word_id, sentence_id=sentence_id, word_number=token.i)
             session.add(new_word_to_sentence)
 
     await session.commit()
@@ -54,7 +60,7 @@ async def parse_text_and_save(text: str, session):
 async def create_and_send_graph(session):
     G = nx.DiGraph()
     result = await session.execute(text("""
-                select w.text as text, pos, dm.description as dep, head_idx, token_idx from word w
+                select w.text as text, pos, dm.description as dep, head_idx, word_number as token_idx from word w
                 join word_to_sentence using(word_id)
                 join sentence using(sentence_id)
                 join sentence_to_text using(sentence_id)
@@ -62,6 +68,8 @@ async def create_and_send_graph(session):
             where meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
                 """))
     words = result.fetchall()
+    if len(words) > 100:
+        return False
 
     words_list = [
         {
@@ -98,6 +106,7 @@ async def create_and_send_graph(session):
     plt.axis('off')
     plt.savefig("graph.png", format="png")
     plt.close()
+    return True
 
 
 async def process_file(file_content, file_extension):
