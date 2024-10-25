@@ -162,12 +162,13 @@ async def handle_choice(call: CallbackQuery):
 async def leaderboard_command(message: Message):
     async with async_session() as session:
         result = await session.execute(text("""
-            select user_name, count(word_id), count(DISTINCT text_id) AS uniq_files from word
+            select user_name, count(word_id) as uniq_words, count(DISTINCT text_id) AS uniq_files from word
             join word_to_sentence using(word_id)
             join sentence using(sentence_id)
             join user_info using(user_id)
             join sentence_to_text using(sentence_id)
             group by user_name
+            order by 2 desc
             Limit 10;
         """))
         leaderboard = result.fetchall()

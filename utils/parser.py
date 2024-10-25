@@ -24,7 +24,7 @@ async def parse_text_and_save(text: str, user_id: int, session, user_name: str):
     if not user_record:
         new_user = UserInfo(user_id=user_id, user_name=user_name)
         session.add(new_user)
-
+        
     text_id = uuid4()
     doc = nlp(text)
     time = datetime.now()
