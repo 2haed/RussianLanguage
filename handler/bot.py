@@ -6,7 +6,7 @@ from aiogram import F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.utils.markdown import hlink, hbold
-from db import async_session
+from db.database import async_session
 import asyncio
 from sqlalchemy import text
 from utils.parser import parse_text_and_save, create_and_send_graph, process_file
@@ -162,10 +162,13 @@ async def handle_choice(call: CallbackQuery):
 async def leaderboard_command(message: Message):
     async with async_session() as session:
         result = await session.execute(text("""
-            SELECT user_name as user_id, uniq_words, uniq_files
-            FROM user_stats
-            ORDER BY uniq_words DESC
-            LIMIT 10;
+            select user_name, count(word_id), count(DISTINCT text_id) AS uniq_files from word
+            join word_to_sentence using(word_id)
+            join sentence using(sentence_id)
+            join user_info using(user_id)
+            join sentence_to_text using(sentence_id)
+            group by user_name
+            Limit 10;
         """))
         leaderboard = result.fetchall()
 
@@ -175,7 +178,7 @@ async def leaderboard_command(message: Message):
 
             table_rows = ""
             for row in leaderboard:
-                table_rows += f"{str(row.user_id):<10} | {row.uniq_words:<12} | {row.uniq_files:<12}\n"
+                table_rows += f"{str(row.user_name):<10} | {row.uniq_words:<12} | {row.uniq_files:<12}\n"
 
             table = f"<pre>{table_header}{table_rows}</pre>"
             await message.answer(table, parse_mode="HTML")

@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from aiogram.types import FSInputFile
 from sqlalchemy import text
 
-from db import async_session
+from db.database import async_session
 
 
 async def plot_part_of_speech_distribution(call):
@@ -309,11 +309,11 @@ async def plot_pos_dependency_correlation(call):
         if data:
 
             df = pd.DataFrame(data, columns=["pos", "dep", "frequency"])
-
+            df["frequency"] = pd.to_numeric(df["frequency"], errors='coerce')
             pivot_table = df.pivot(index='pos', columns='dep', values='frequency').fillna(0)
 
             plt.figure(figsize=(12, 8))
-            sns.heatmap(pivot_table, annot=False, cmap='coolwarm', linewidths=.5)
+            sns.heatmap(pivot_table, annot=False, cmap='coolwarm', linewidths=.5, vmin=0, vmax=1)
 
             plt.title('Корреляция между частями речи и синтаксическими зависимостями')
             plt.xlabel('Синтаксическая зависимость')

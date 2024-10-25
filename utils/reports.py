@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from db import async_session
+from db.database import async_session
 
 
 async def generate_excel_report():

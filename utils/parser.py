@@ -10,7 +10,7 @@ import os
 from docx import Document
 import tempfile
 import asyncio
-from db import SentenceToText, Sentence, Word, WordToSentence, UserInfo
+from db.database import SentenceToText, Sentence, Word, WordToSentence, UserInfo
 
 nlp = spacy.load("ru_core_news_sm")
 nlp.max_length = 3000000

@@ -22,7 +22,7 @@ services:
       - db
   db_migrate:
     build: .
-    command: [ "python", "migrate.py" ]
+    command: [ "python", "db/migrate.py" ]
     depends_on:
       - db
     environment:
