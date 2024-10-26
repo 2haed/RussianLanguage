@@ -93,7 +93,7 @@ async def handle_choice(call: CallbackQuery):
                                         word_id,
                                         coalesce(start_format_string, '') || coalesce(text, '') || coalesce(end_format_string, '') as text
                                     from word w
-                                    join dep_mapping dm on w.dep = dm.code
+                                    left join dep_mapping dm on w.dep = dm.code
                                     left join dep_formats df using(description)
                                 ), raw as (
                                 select ws.sentence_id,
@@ -114,12 +114,12 @@ async def handle_choice(call: CallbackQuery):
                 full_text = last_file[0]
 
                 if len(full_text) <= 4096:
-                    await call.message.answer(f"Вот содержимое файла:\n\n{full_text}", parse_mode="MarkdownV2")
+                    await call.message.answer(f"Вот содержимое файла:\n\n{full_text}", parse_mode="HTML")
                 else:
-                    with open("text_data.md", "w", encoding="utf-8") as file:
-                        file.write(full_text)
+                    with open("text_data.html", "w", encoding="utf-8") as file:
+                        file.write(f'<body>{full_text}</body>')
 
-                    md_file = FSInputFile("text_data.md")
+                    md_file = FSInputFile("text_data.html")
                     await call.message.answer_document(md_file, caption="Текст слишком большой, вот файл с текстом.")
 
         elif call.data == "image_choice":
