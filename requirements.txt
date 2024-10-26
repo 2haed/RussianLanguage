@@ -12,3 +12,4 @@ aspose-words
 seaborn
 pandas
 xlsxwriter
+prettytable

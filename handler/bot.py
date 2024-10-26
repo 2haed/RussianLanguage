@@ -1,4 +1,5 @@
 import os
+import prettytable as pt 
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, FSInputFile, InlineKeyboardButton, CallbackQuery
@@ -113,13 +114,13 @@ async def handle_choice(call: CallbackQuery):
                 full_text = last_file[0]
 
                 if len(full_text) <= 4096:
-                    await call.message.answer(f"Вот содержимое файла:\n\n{full_text}", parse_mode="HTML")
+                    await call.message.answer(f"Вот содержимое файла:\n\n{full_text}", parse_mode="MarkdownV2")
                 else:
-                    with open("text_data.txt", "w", encoding="utf-8") as file:
+                    with open("text_data.md", "w", encoding="utf-8") as file:
                         file.write(full_text)
 
-                    txt_file = FSInputFile("text_data.txt")
-                    await call.message.answer_document(txt_file, caption="Текст слишком большой, вот файл с текстом.")
+                    md_file = FSInputFile("text_data.md")
+                    await call.message.answer_document(md_file, caption="Текст слишком большой, вот файл с текстом.")
 
         elif call.data == "image_choice":
             status = await create_and_send_graph(session)
@@ -132,7 +133,7 @@ async def handle_choice(call: CallbackQuery):
 
         elif call.data == "stats_choice":
             result = await session.execute(text("""
-                        select dm.description as dep, count(*) from word w
+                        select w.lemma, dm.description as dep, count(*) from word w
                             join word_to_sentence using(word_id)
                             join sentence using(sentence_id)
                             join sentence_to_text using(sentence_id)
@@ -140,22 +141,21 @@ async def handle_choice(call: CallbackQuery):
                         where 1=1
                             and meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
                             and pos != 'PUNCT'
-                        group by 1
-                        order by 2 desc
+                        group by 1, 2
+                        order by 3 desc
                         """))
             stats = result.fetchall()
 
             if stats:
-                max_dep_length = max(len(row.dep) for row in stats)
+                table = pt.PrettyTable(['Слово', 'Член предложения', 'Кол-во'])
+            
+                if len(stats) > 30:
+                    stats = stats[:30]
 
-                table_header = "Член предложения" + " " * (max_dep_length - len("Член предложения")) + " | Количество\n"
-                table_header += "-" * (max_dep_length + 14) + "\n"
-
-                table_rows = ""
                 for row in stats:
-                    table_rows += f"{row.dep:<{max_dep_length}} | {row.count}\n"
-                table = f"<pre>{table_header}{table_rows}</pre>"
-                await call.message.answer(table, parse_mode="HTML")
+                    table.add_row([row.lemma, row.dep, row.count])
+
+                await call.message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
 
 
 @router.message(Command("leaderboard"))
@@ -174,15 +174,15 @@ async def leaderboard_command(message: Message):
         leaderboard = result.fetchall()
 
         if leaderboard:
-            table_header = f"{'User':<10} | {'Слов':<12} | {'Файлов загружено':<12}\n"
-            table_header += "-" * 52 + "\n"
+            table = pt.PrettyTable(['User', 'Слов', 'Файлов загружено'])
 
-            table_rows = ""
+            if len(leaderboard) > 30:
+                    leaderboard = leaderboard[:30]
+
             for row in leaderboard:
-                table_rows += f"{str(row.user_name):<10} | {row.uniq_words:<12} | {row.uniq_files:<12}\n"
+                table.add_row([row.user_name, row.uniq_words, row.uniq_files])
 
-            table = f"<pre>{table_header}{table_rows}</pre>"
-            await message.answer(table, parse_mode="HTML")
+            await message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
         else:
             await message.answer("Нет данных для отображения.")
 
