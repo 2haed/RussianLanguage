@@ -49,11 +49,11 @@ async def parse_text_and_save(text: str, user_id: int, session, user_name: str):
             word_id = uuid4()
 
             if token.dep_ == 'conj':
-                dep = token.head.dep
+                dep = token.head.dep_
             else:
                 dep = token.dep_
 
-            new_word = Word(word_id=word_id, text=token.text, pos=token.pos_, dep=dep, lemma=token.lemma_, head_idx=token.head.i)
+            new_word = Word(word_id=word_id, text=str(token.text), pos=str(token.pos_), dep=str(dep), lemma=str(token.lemma_), head_idx=int(token.head.i))
             session.add(new_word)
 
             new_word_to_sentence = WordToSentence(word_id=word_id, sentence_id=sentence_id, word_number=token.i)

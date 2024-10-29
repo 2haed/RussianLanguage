@@ -5,7 +5,10 @@ WORKDIR /app
 
 # Копируем файлы проекта в контейнер
 COPY . /app
-
+RUN apt-get update && \
+    apt-get install -y wget ca-certificates && \
+    update-ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 # Устанавливаем системные зависимости для pygraphviz, Graphviz и antiword
 RUN apt-get update && \
     apt-get install -y \

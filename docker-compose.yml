@@ -16,7 +16,7 @@ services:
   bot:
     build: .
     environment:
-      TELEGRAM_TOKEN: "7204688795:AAFGUAzaT1cndovYVl9b_Ql9ve2uBr7WCrA"
+      TELEGRAM_TOKEN: "your_token"
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
     depends_on:
       - db
