@@ -50,13 +50,15 @@ async def start_command(message: Message):
 @router.message(Command("init"))
 async def init_command(message: Message):
     waiting_for_file[message.from_user.id] = True
-    await message.answer("Пришли файл (txt/doc/docx), который ты хочешь проанализировать.")
+    await message.answer("Пришли файл (txt/doc/docx) или текст (в сообщении), который ты хочешь проанализировать.")
 
 
-@router.message(F.document)
+@router.message(F.document | F.text)
 async def handle_file(message: Message):
     if waiting_for_file.get(message.from_user.id):
         file = message.document
+        text_content = message.text # Если в сообщении есть файл, то текст из файла перепишет эту переменную
+
         if file:
             file_info = await bot.get_file(file.file_id)
             file_content = await bot.download_file(file_info.file_path)
@@ -64,23 +66,24 @@ async def handle_file(message: Message):
 
             try:
                 text_content = await process_file(file_content, file_extension)
-
-                async with async_session() as session:
-                    await parse_text_and_save(text_content, message.from_user.id, session, message.from_user.full_name)
-
-                waiting_for_file[message.from_user.id] = False
-
-                builder = InlineKeyboardBuilder()
-                builder.add(InlineKeyboardButton(text="Текст", callback_data="text_choice"))
-                builder.add(InlineKeyboardButton(text="Картинка", callback_data="image_choice"))
-                builder.add(InlineKeyboardButton(text="Статистика", callback_data="stats_choice"))
-                builder.adjust(1)
-                await message.answer("Файл получен. Как ты хочешь увидеть результат: в виде текста, картинки или статистики?",
-                                     reply_markup=builder.as_markup())
             except Exception as e:
                 await message.answer(f"Произошла ошибка при обработке файла: {str(e)}")
+            
+        async with async_session() as session:
+            await parse_text_and_save(text_content, message.from_user.id, session, message.from_user.full_name)
+
+        waiting_for_file[message.from_user.id] = False
+
+        builder = InlineKeyboardBuilder()
+        builder.add(InlineKeyboardButton(text="Текст", callback_data="text_choice"))
+        builder.add(InlineKeyboardButton(text="Картинка", callback_data="image_choice"))
+        builder.add(InlineKeyboardButton(text="Статистика", callback_data="stats_choice"))
+        builder.adjust(1)
+        await message.answer("Текст получен. Как ты хочешь увидеть результат: в виде текста, картинки или статистики?",
+                                reply_markup=builder.as_markup())
+
     else:
-        await message.answer("Сначала используй команду /init, чтобы отправить файл.")
+        await message.answer("Сначала используй команду /init, чтобы отправить файл или текст.")
 
 
 @router.callback_query(F.data.in_({"text_choice", "image_choice", "stats_choice"}))
