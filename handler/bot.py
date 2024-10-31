@@ -7,7 +7,7 @@ from aiogram import F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.utils.markdown import hlink, hbold
-from db.database import async_session
+from db.database import async_session, DEP_DESCRIPTION
 import asyncio
 from sqlalchemy import text
 from utils.parser import parse_text_and_save, create_and_send_graph, process_file
@@ -117,10 +117,10 @@ async def handle_choice(call: CallbackQuery):
                 full_text = last_file[0]
 
                 if len(full_text) <= 4096:
-                    await call.message.answer(f"Вот содержимое файла:\n\n{full_text}", parse_mode="HTML")
+                    await call.message.answer(f"Вот содержимое файла:\n{DEP_DESCRIPTION}\n\n{full_text}", parse_mode="HTML")
                 else:
                     with open("text_data.html", "w", encoding="utf-8") as file:
-                        file.write(f'<body>{full_text}</body>')
+                        file.write(f'<body><div>Памятка к тексту:<br>{DEP_DESCRIPTION}<br></div><br><div>{full_text}</div></body>')
 
                     md_file = FSInputFile("text_data.html")
                     await call.message.answer_document(md_file, caption="Текст слишком большой, вот файл с текстом.")

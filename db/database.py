@@ -140,6 +140,8 @@ DEP_FORMATS = {
     'деепричастие': ('<i><u>', '</u></i>'),
 }
 
+DEP_DESCRIPTION = ''.join(f'{value[0]}{key.capitalize()}{value[1]}\n ' for key, value in DEP_FORMATS.items())
+
 
 async def populate_initial_data():
     async with async_session() as session:
