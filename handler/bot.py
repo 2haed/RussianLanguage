@@ -53,6 +53,45 @@ async def init_command(message: Message):
     await message.answer("Пришли файл (txt/doc/docx) или текст (в сообщении), который ты хочешь проанализировать.")
 
 
+@router.message(Command("leaderboard"))
+async def leaderboard_command(message: Message):
+    async with async_session() as session:
+        result = await session.execute(text("""
+            select user_name, count(word_id) as uniq_words, count(DISTINCT text_id) AS uniq_files from word
+            join word_to_sentence using(word_id)
+            join sentence using(sentence_id)
+            join user_info using(user_id)
+            join sentence_to_text using(sentence_id)
+            group by user_name
+            order by 2 desc
+            Limit 10;
+        """))
+        leaderboard = result.fetchall()
+
+        if leaderboard:
+            table = pt.PrettyTable(['User', 'Слов', 'Файлов загружено'])
+
+            if len(leaderboard) > 30:
+                    leaderboard = leaderboard[:30]
+
+            for row in leaderboard:
+                table.add_row([row.user_name, row.uniq_words, row.uniq_files])
+
+            await message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
+        else:
+            await message.answer("Нет данных для отображения.")
+
+
+@router.message(Command("stats"))
+async def stats_command(message: Message):
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="Графики", callback_data="stats_graphics"))
+    builder.add(InlineKeyboardButton(text="Отчеты", callback_data="stats_reports"))
+    builder.adjust(2)
+
+    await message.answer("Выберите категорию:", reply_markup=builder.as_markup())
+    
+
 @router.message(F.document | F.text)
 async def handle_file(message: Message):
     if waiting_for_file.get(message.from_user.id):
@@ -159,46 +198,6 @@ async def handle_choice(call: CallbackQuery):
                     table.add_row([row.lemma, row.dep, row.count])
 
                 await call.message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
-
-
-@router.message(Command("leaderboard"))
-async def leaderboard_command(message: Message):
-    async with async_session() as session:
-        result = await session.execute(text("""
-            select user_name, count(word_id) as uniq_words, count(DISTINCT text_id) AS uniq_files from word
-            join word_to_sentence using(word_id)
-            join sentence using(sentence_id)
-            join user_info using(user_id)
-            join sentence_to_text using(sentence_id)
-            group by user_name
-            order by 2 desc
-            Limit 10;
-        """))
-        leaderboard = result.fetchall()
-
-        if leaderboard:
-            table = pt.PrettyTable(['User', 'Слов', 'Файлов загружено'])
-
-            if len(leaderboard) > 30:
-                    leaderboard = leaderboard[:30]
-
-            for row in leaderboard:
-                table.add_row([row.user_name, row.uniq_words, row.uniq_files])
-
-            await message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
-        else:
-            await message.answer("Нет данных для отображения.")
-
-
-@router.message(Command("stats"))
-async def stats_command(message: Message):
-    builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text="Графики", callback_data="stats_graphics"))
-    builder.add(InlineKeyboardButton(text="Отчеты", callback_data="stats_reports"))
-    builder.adjust(2)
-
-    await message.answer("Выберите категорию:", reply_markup=builder.as_markup())
-
 
 
 @router.callback_query(F.data.in_({"stats_graphics", "stats_reports"}))
