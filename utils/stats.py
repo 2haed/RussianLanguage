@@ -249,14 +249,25 @@ async def plot_sentence_length_over_time(call):
     async with async_session() as session:
 
         result = await session.execute(text("""
-            SELECT
-                date_trunc('day', meta_timestamp) AS date,
-                AVG(lenght) AS avg_sentence_length
-            FROM (select sentence_id, count(word_id) as  lenght from word_to_sentence
-            group by sentence_id) s
-            join sentence_to_text using(sentence_id)
-            GROUP BY date
-            ORDER BY date
+            select
+                date_trunc('day',
+                meta_timestamp) as date,
+                AVG(lenght) as avg_sentence_length
+            from
+                (select
+                    sentence_id,
+                    count(word_id) as lenght
+                from word_to_sentence
+                join sentence_to_text stt2 using(sentence_id)
+                join word w using(word_id)
+                where 1=1
+                    and dep not ilike 'punct'
+                    and pos not ilike 'punct'
+                group by sentence_id ) s
+            join sentence_to_text
+                    using(sentence_id)
+            group by date
+            order by date
         """))
 
         data = result.fetchall()
