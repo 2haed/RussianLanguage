@@ -1,6 +1,6 @@
 import os
+from abc import ABC, abstractmethod
 import prettytable as pt 
-
 from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, FSInputFile, InlineKeyboardButton, CallbackQuery
 from aiogram import F
@@ -11,7 +11,6 @@ from db.database import async_session, DEP_DESCRIPTION
 import asyncio
 from sqlalchemy import text
 from utils.parser import parse_text_and_save, create_and_send_graph, process_file
-
 from utils.reports import generate_excel_report
 from utils.stats import plot_part_of_speech_distribution, plot_syntax_dependency_distribution, \
     plot_sentence_length_distribution, plot_top_10_frequent_words, plot_word_part_of_speech_vs_sentence_length, \
@@ -26,6 +25,45 @@ router = Router()
 
 waiting_for_file = {}
 
+MAX_MESSAGE_LENGTH = 4096
+MAX_STAT_TABLE_LENGHT = 30
+
+class GraphHandler(ABC):
+    @abstractmethod
+    async def plot(self, call: CallbackQuery):
+        pass
+
+class PartOfSpeechDistributionHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_part_of_speech_distribution(call)
+
+class SyntaxDependencyDistributionHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_syntax_dependency_distribution(call)
+
+class SentenceLengthDistributionHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_sentence_length_distribution(call)
+
+class TopFrequentWordsHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_top_10_frequent_words(call)
+
+class PosVsSentenceLengthHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_word_part_of_speech_vs_sentence_length(call)
+
+class UserSyntaxStatsHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_user_syntax_statistics(call)
+
+class SentenceLengthOverTimeHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_sentence_length_over_time(call)
+
+class PosDependencyCorrelationHandler(GraphHandler):
+    async def plot(self, call: CallbackQuery):
+        await plot_pos_dependency_correlation(call)
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):
@@ -71,8 +109,8 @@ async def leaderboard_command(message: Message):
         if leaderboard:
             table = pt.PrettyTable(['User', 'Слов', 'Файлов загружено'])
 
-            if len(leaderboard) > 30:
-                    leaderboard = leaderboard[:30]
+            if len(leaderboard) > MAX_STAT_TABLE_LENGHT:
+                    leaderboard = leaderboard[:MAX_STAT_TABLE_LENGHT]
 
             for row in leaderboard:
                 table.add_row([row.user_name, row.uniq_words, row.uniq_files])
@@ -155,7 +193,7 @@ async def handle_choice(call: CallbackQuery):
             if last_file:
                 full_text = last_file[0]
 
-                if len(full_text) <= 4096:
+                if len(full_text) <= MAX_MESSAGE_LENGTH:
                     await call.message.answer(f"Вот содержимое файла:\n{DEP_DESCRIPTION}\n\n{full_text}", parse_mode="HTML")
                 else:
                     with open("text_data.html", "w", encoding="utf-8") as file:
@@ -191,31 +229,47 @@ async def handle_choice(call: CallbackQuery):
             if stats:
                 table = pt.PrettyTable(['Слово', 'Член предложения', 'Кол-во'])
             
-                if len(stats) > 30:
-                    stats = stats[:30]
+                if len(stats) > MAX_STAT_TABLE_LENGHT:
+                    stats = stats[:MAX_STAT_TABLE_LENGHT]
 
                 for row in stats:
                     table.add_row([row.lemma, row.dep, row.count])
 
                 await call.message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
 
+def get_graph_handler(graph_type: str) -> GraphHandler:
+    handlers = {
+        "graph_pos_distribution": PartOfSpeechDistributionHandler(),
+        "graph_syntax_dependency": SyntaxDependencyDistributionHandler(),
+        "graph_sentence_length": SentenceLengthDistributionHandler(),
+        "graph_top_frequent_words": TopFrequentWordsHandler(),
+        "graph_pos_vs_sentence_length": PosVsSentenceLengthHandler(),
+        "graph_user_syntax_stats": UserSyntaxStatsHandler(),
+        "graph_sentence_length_over_time": SentenceLengthOverTimeHandler(),
+        "graph_pos_dependency_correlation": PosDependencyCorrelationHandler(),
+    }
+    return handlers.get(graph_type)
 
 @router.callback_query(F.data.in_({"stats_graphics", "stats_reports"}))
 async def stats_choice(call: CallbackQuery):
+    builder = InlineKeyboardBuilder()
+    
     if call.data == "stats_graphics":
-        builder = InlineKeyboardBuilder()
-        builder.add(InlineKeyboardButton(text="Распределение частей речи", callback_data="graph_pos_distribution"))
-        builder.add(InlineKeyboardButton(text="Распределение синтаксических зависимостей", callback_data="graph_syntax_dependency"))
-        builder.add(InlineKeyboardButton(text="Длина предложений", callback_data="graph_sentence_length"))
-        builder.add(InlineKeyboardButton(text="Топ 10 частотных слов", callback_data="graph_top_frequent_words"))
-        builder.add(InlineKeyboardButton(text="Часть речи и длина предложения", callback_data="graph_pos_vs_sentence_length"))
-        builder.add(InlineKeyboardButton(text="Статистика синтаксиса пользователей", callback_data="graph_user_syntax_stats"))
-        builder.add(InlineKeyboardButton(text="Длина предложений с течением времени", callback_data="graph_sentence_length_over_time"))
-        builder.add(InlineKeyboardButton(text="Корреляция частей речи и зависимостей",callback_data="graph_pos_dependency_correlation"))
+        graph_buttons = [
+            ("Распределение частей речи", "graph_pos_distribution"),
+            ("Распределение синтаксических зависимостей", "graph_syntax_dependency"),
+            ("Длина предложений", "graph_sentence_length"),
+            ("Топ 10 частотных слов", "graph_top_frequent_words"),
+            ("Часть речи и длина предложения", "graph_pos_vs_sentence_length"),
+            ("Статистика синтаксиса пользователей", "graph_user_syntax_stats"),
+            ("Длина предложений с течением времени", "graph_sentence_length_over_time"),
+            ("Корреляция частей речи и зависимостей", "graph_pos_dependency_correlation"),
+        ]
+        for text, callback_data in graph_buttons:
+            builder.add(InlineKeyboardButton(text=text, callback_data=callback_data))
         builder.adjust(1)
         await call.message.edit_text("Выберите график:", reply_markup=builder.as_markup())
     elif call.data == "stats_reports":
-        builder = InlineKeyboardBuilder()
         builder.add(InlineKeyboardButton(text="Создать отчет в Excel", callback_data="generate_excel_report"))
         builder.adjust(1)
         await call.message.edit_text("Выберите отчет:", reply_markup=builder.as_markup())
@@ -229,7 +283,6 @@ async def handle_excel_report(call: CallbackQuery):
             await call.message.answer_document(excel_file, caption="Вот ваш отчет в Excel.")
         else:
             await call.message.answer("Не удалось создать отчет.")
-
     except Exception as e:
         await call.message.answer(f"Произошла ошибка при создании отчета: {str(e)}")
 
@@ -244,20 +297,11 @@ async def handle_excel_report(call: CallbackQuery):
     "graph_pos_dependency_correlation"
 ]))
 async def handle_graph_choice(call: CallbackQuery):
-    graph_map = {
-        "graph_pos_distribution": plot_part_of_speech_distribution,
-        "graph_syntax_dependency": plot_syntax_dependency_distribution,
-        "graph_sentence_length": plot_sentence_length_distribution,
-        "graph_top_frequent_words": plot_top_10_frequent_words,
-        "graph_pos_vs_sentence_length": plot_word_part_of_speech_vs_sentence_length,
-        "graph_user_syntax_stats": plot_user_syntax_statistics,
-        "graph_sentence_length_over_time": plot_sentence_length_over_time,
-        "graph_pos_dependency_correlation": plot_pos_dependency_correlation,
-    }
-
-    graph_function = graph_map.get(call.data)
-    if graph_function:
-        await graph_function(call)
+    graph_handler = get_graph_handler(call.data)
+    if graph_handler:
+        await graph_handler.plot(call)
+    else:
+        await call.message.answer("Неверный выбор графика.")
 
 async def start_bot():
     dp.include_router(router)

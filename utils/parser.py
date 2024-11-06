@@ -15,6 +15,14 @@ from db.database import SentenceToText, Sentence, Word, WordToSentence, UserInfo
 nlp = spacy.load("ru_core_news_sm")
 nlp.max_length = 3000000
 
+class SentenceInfo:
+    def __init__(self, text, sentence_number, sentence_id, text_id, meta_timestamp, user_id):
+        self.text = text
+        self.sentence_number = sentence_number
+        self.sentence_id = sentence_id
+        self.text_id = text_id
+        self.meta_timestamp = meta_timestamp
+        self.user_id = user_id
 
 async def parse_text_and_save(text: str, user_id: int, session, user_name: str):
     existing_user = await session.execute(select(UserInfo).filter_by(user_id=user_id))
@@ -35,11 +43,26 @@ async def parse_text_and_save(text: str, user_id: int, session, user_name: str):
 
         sentence_id = uuid4()
 
-        new_sentence = Sentence(sentence_id=sentence_id, text=sent.text, user_id=user_id)
+        sentence_info = SentenceInfo(
+            text=sent.text,
+            sentence_number=sentence_number,
+            sentence_id=sentence_id,
+            text_id=text_id,
+            meta_timestamp=time,
+            user_id=user_id
+        )
+
+        new_sentence = Sentence(sentence_id=sentence_info.sentence_id, 
+                                text=sentence_info.text, 
+                                user_id=sentence_info.user_id
+        )
         session.add(new_sentence)
 
-        new_sentence_to_text = SentenceToText(sentence_id=sentence_id, text_id=text_id, sentence_number=sentence_number,
-                                              meta_timestamp=time)
+        new_sentence_to_text = SentenceToText(
+            sentence_id=sentence_info.sentence_id, text_id=sentence_info.text_id,
+            sentence_number=sentence_info.sentence_number, 
+            meta_timestamp=sentence_info.meta_timestamp
+        )
         session.add(new_sentence_to_text)
 
         word_number = 0
@@ -56,11 +79,13 @@ async def parse_text_and_save(text: str, user_id: int, session, user_name: str):
             new_word = Word(word_id=word_id, text=str(token.text), pos=str(token.pos_), dep=str(dep), lemma=str(token.lemma_), head_idx=int(token.head.i))
             session.add(new_word)
 
-            new_word_to_sentence = WordToSentence(word_id=word_id, sentence_id=sentence_id, word_number=token.i)
+            new_word_to_sentence = WordToSentence(word_id=word_id, 
+                                                  sentence_id=sentence_info.sentence_id, 
+                                                  word_number=token.i
+        )
             session.add(new_word_to_sentence)
 
     await session.commit()
-
 
 async def create_and_send_graph(session):
     G = nx.DiGraph()
@@ -73,6 +98,7 @@ async def create_and_send_graph(session):
             where meta_timestamp = (select max(meta_timestamp) from sentence_to_text)
                 """))
     words = result.fetchall()
+
     if len(words) > 100:
         return False
 

@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
 engine = create_engine(DATABASE_URL, echo=True)
 
-CREATE_TABLES = """
+CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS sentence (
     sentence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     text TEXT NOT NULL,
